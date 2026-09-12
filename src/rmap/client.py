@@ -95,10 +95,10 @@ class RMAPClient:
         return encrypt_json(payload, self.serverPublicKey)
 
     def process_resp2(self, resp2: dict) -> str:
-        """Decrypt resp2 and return the link string."""
+        """Decrypt resp2 and return the link string (found under the "result" key)."""
         data = decrypt_json(resp2, self.clientPrivateKey, self._passphrase, self.logger)
-        link = data["link"]
-        self.logger.info("Processed resp2: link=%s", link)
+        link = data["result"]
+        self.logger.info("Processed resp2: result=%s", link)
         return link
 
     @property

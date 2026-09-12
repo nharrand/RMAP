@@ -78,6 +78,72 @@ def test_receive_msg2_without_prior_msg1(server, client):
         server.receiveMsg2(fake_msg2)
 
 
+def test_receive_msg2_link_prefix_applied_to_resp2_only(keys):
+    """
+    linkPrefix should be prepended to the "link" field the client
+    receives inside resp2, but must NOT affect the bare expectedLink
+    value returned by receiveMsg2()/getExpectedLink().
+    """
+    from rmap.client import RMAPClient
+
+    srv = RMAPServer(
+        keys["server_pub"], keys["server_priv"],
+        linkPrefix="http://localhost:5000/get-document/",
+    )
+    srv.loadIdentities(keys["clients_dir"])
+
+    cl = RMAPClient(
+        identity="Group_01",
+        client_private_key_path=keys["client_priv"],
+        server_public_key_path=keys["server_pub"],
+    )
+
+    msg1 = cl.build_msg1()
+    identity, resp1 = srv.receiveMsg1(msg1)
+    cl.process_resp1(resp1)
+
+    msg2 = cl.build_msg2()
+    identity, expected_link, resp2 = srv.receiveMsg2(msg2)
+
+    # expectedLink (return value) and getExpectedLink() are unaffected.
+    assert not expected_link.startswith("http")
+    assert len(expected_link) == 32
+    assert expected_link == srv.getExpectedLink("Group_01")
+
+    # But what the client actually decrypts out of resp2 has the prefix.
+    link_received_by_client = cl.process_resp2(resp2)
+    assert link_received_by_client == f"http://localhost:5000/get-document/{expected_link}"
+
+
+def test_default_link_prefix_is_empty(server, client):
+    """With no linkPrefix given, resp2's link matches expectedLink exactly."""
+    msg1 = client.build_msg1()
+    identity, resp1 = server.receiveMsg1(msg1)
+    client.process_resp1(resp1)
+
+    msg2 = client.build_msg2()
+    identity, expected_link, resp2 = server.receiveMsg2(msg2)
+
+    link = client.process_resp2(resp2)
+    assert link == expected_link
+
+
+def test_resp2_wire_format_uses_result_key(server, client):
+    """resp2 must decrypt to {"result": "<link>"}, per this project's API spec."""
+    from rmap.crypto import decrypt_json
+
+    msg1 = client.build_msg1()
+    identity, resp1 = server.receiveMsg1(msg1)
+    client.process_resp1(resp1)
+
+    msg2 = client.build_msg2()
+    identity, expected_link, resp2 = server.receiveMsg2(msg2)
+
+    decrypted_resp2 = decrypt_json(resp2, client.clientPrivateKey)
+    assert set(decrypted_resp2.keys()) == {"result"}
+    assert decrypted_resp2["result"] == expected_link
+
+
 def test_get_expected_link_before_handshake(server):
     with pytest.raises(ProtocolStateException):
         server.getExpectedLink("Group_01")

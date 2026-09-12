@@ -2,8 +2,17 @@
 Command-line RMAP test client.
 
 Drives a full RMAP handshake (msg1 -> resp1 -> msg2 -> resp2) against a
-running Flask server, prints the resulting link, and optionally fetches
-it via HTTP GET to check the server's "get-link" endpoint end-to-end.
+running Flask server and prints the resulting link. Optionally performs
+one extra HTTP GET afterwards as a convenience for manual testing (see
+--fetch-link / --get-link-path below) - but note that RMAP itself does
+not implement, require, or assume any particular "retrieve the secret
+resource" endpoint. That endpoint (its name, URL shape, and what it
+returns) is entirely defined by your own Flask app - it might be
+/get-link/<hex>, /get-document/<id>, something else entirely, or not
+be a GET on a URL path segment at all. --get-link-path is just this
+CLI's configurable guess for the common case; override it (or skip
+--fetch-link and test your endpoint separately) if your app's shape
+doesn't match.
 
 Example:
 
@@ -89,13 +98,32 @@ def run(args: argparse.Namespace) -> int:
     print()
     print(f"Link returned by server:   {link}")
     print(f"Link expected by client:   {client.expected_link}")
+    # The server may have been configured with a `linkPrefix` (e.g. a full
+    # "http://host:port/get-link/" URL), in which case `link` won't be
+    # exactly equal to the bare hex `client.expected_link` - it will just
+    # end with it. Both cases are "OK"; only a link that neither matches
+    # nor ends with the expected value indicates an actual problem.
     if link == client.expected_link:
         print("OK: link matches expected value.")
+    elif link.endswith(client.expected_link):
+        print("OK: link matches expected value (server applied a linkPrefix).")
     else:
         print("MISMATCH: server returned a different link than expected!")
 
     if args.fetch_link:
-        link_url = f"{base_url}{args.get_link_path}/{link}"
+        if link.startswith("http://") or link.startswith("https://"):
+            # The server already gave us a ready-to-use absolute URL
+            # (linkPrefix was set) - use it as-is, whatever shape it is.
+            link_url = link
+        else:
+            # No linkPrefix was set, so we only have the bare hex link.
+            # --get-link-path is just this CLI's configurable guess at
+            # where to fetch it from (default: /get-link/<link>) - RMAP
+            # itself doesn't require or assume this. Override
+            # --get-link-path, or skip --fetch-link and test your
+            # endpoint separately, if your app's shape is different
+            # (e.g. /get-document/<id> with an id unrelated to `link`).
+            link_url = f"{base_url}{args.get_link_path}/{link}"
         print(f"\n--> Fetching {link_url}")
         try:
             r = requests.get(link_url, timeout=args.timeout)
@@ -130,9 +158,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--get-link-path",
         default="/get-link",
-        help="Path prefix of the get-link endpoint (default: /get-link, so the full URL is <url>/get-link/<link>)",
+        help=(
+            "Only used with --fetch-link when the server did NOT set a "
+            "linkPrefix (so the CLI only has the bare hex link and needs "
+            "a guess at where to fetch it). Default: /get-link, so the "
+            "full URL is <url>/get-link/<link>. RMAP does not require or "
+            "assume this path - override it to match your own endpoint "
+            "(e.g. --get-link-path /get-document), or skip --fetch-link "
+            "entirely and test your endpoint separately."
+        ),
     )
-    parser.add_argument("--fetch-link", action="store_true", help="After the handshake, GET the resulting link")
+    parser.add_argument(
+        "--fetch-link",
+        action="store_true",
+        help=(
+            "After the handshake, GET the resulting link as a convenience "
+            "check. This is optional tooling, not a protocol requirement - "
+            "skip it if your endpoint doesn't fit a simple GET on the link."
+        ),
+    )
     parser.add_argument("--timeout", type=float, default=10.0, help="HTTP timeout in seconds (default: 10)")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose protocol logging")
     return parser

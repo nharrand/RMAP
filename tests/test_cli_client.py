@@ -85,3 +85,80 @@ def test_cli_arg_parser_defaults():
     assert args.msg2_path == "/msg2"
     assert args.get_link_path == "/get-link"
     assert args.fetch_link is False
+
+
+def test_cli_handles_server_side_link_prefix(monkeypatch, keys, capsys):
+    """
+    When the server is configured with a linkPrefix, resp2's "link" is
+    already an absolute URL. The CLI should recognize this (rather than
+    reporting a false MISMATCH) and fetch that URL directly.
+    """
+    from rmap.server import RMAPServer
+
+    prefixed_server = RMAPServer(
+        keys["server_pub"], keys["server_priv"],
+        linkPrefix="http://fake-server/get-link/",
+    )
+    prefixed_server.loadIdentities(keys["clients_dir"])
+
+    completed_links = {}
+
+    def fake_post(url, json=None, timeout=None):
+        if url.endswith("/msg1"):
+            identity, resp1 = prefixed_server.receiveMsg1(json)
+            return _FakeResponse(resp1)
+        elif url.endswith("/msg2"):
+            identity, expected_link, resp2 = prefixed_server.receiveMsg2(json)
+            completed_links[expected_link] = identity
+            return _FakeResponse(resp2)
+        raise AssertionError(f"Unexpected POST to {url}")
+
+    def fake_get(url, timeout=None):
+        link = url.rsplit("/", 1)[-1]
+        if link in completed_links:
+            return _FakeResponse({"status": "ok", "identity": completed_links[link]})
+        return _FakeResponse({"status": "unknown link"}, status_code=404)
+
+    monkeypatch.setattr(cli_client.requests, "post", fake_post)
+    monkeypatch.setattr(cli_client.requests, "get", fake_get)
+
+    args = cli_client.build_arg_parser().parse_args([
+        "--url", "http://fake-server",
+        "--identity", "Group_01",
+        "--client-private-key", str(keys["client_priv"]),
+        "--server-public-key", str(keys["server_pub"]),
+        "--no-passphrase-prompt",
+        "--fetch-link",
+    ])
+    rc = cli_client.run(args)
+    assert rc == 0
+
+    out = capsys.readouterr().out
+    assert "OK: link matches expected value (server applied a linkPrefix)." in out
+    assert "--> Fetching http://fake-server/get-link/" in out
+    assert "HTTP 200" in out
+
+
+def test_cli_get_link_path_is_fully_overridable(fake_requests, keys, capsys):
+    """
+    RMAP does not require or assume any specific "retrieve the resource"
+    endpoint name. --get-link-path should work just as well pointed at a
+    completely unrelated route name (e.g. a /get-document/<id>-style
+    endpoint), proving this is purely CLI convenience, not a protocol
+    requirement.
+    """
+    args = cli_client.build_arg_parser().parse_args([
+        "--url", "http://fake-server",
+        "--identity", "Group_01",
+        "--client-private-key", str(keys["client_priv"]),
+        "--server-public-key", str(keys["server_pub"]),
+        "--no-passphrase-prompt",
+        "--fetch-link",
+        "--get-link-path", "/get-document",
+    ])
+    rc = cli_client.run(args)
+    assert rc == 0
+
+    out = capsys.readouterr().out
+    assert "--> Fetching http://fake-server/get-document/" in out
+    assert "HTTP 200" in out

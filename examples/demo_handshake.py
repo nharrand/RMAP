@@ -68,7 +68,15 @@ def main() -> None:
         # ------------------------------------------------------------
         banner("STEP 1 - Set up RMAPServer and RMAPClient")
         # ------------------------------------------------------------
-        server = RMAPServer(server_pub_path, server_priv_path, verbose=False)
+        # linkPrefix is entirely a project choice - RMAP has no opinion
+        # on endpoint names or URL shape. This demo uses "/get-document/"
+        # to illustrate that it doesn't have to be "/get-link/" at all.
+        server = RMAPServer(
+            server_pub_path,
+            server_priv_path,
+            linkPrefix="http://localhost:5000/get-document/",
+            verbose=False,
+        )
         server.loadIdentities(clients_dir)
         print(f"Server loaded identities: {list(server.identities.keys())}")
 
@@ -113,30 +121,33 @@ def main() -> None:
         print_plain("msg2", msg2_plain)
 
         # ------------------------------------------------------------
-        banner("STEP 5 - Server processes msg2 and builds resp2: {link}")
+        banner("STEP 5 - Server processes msg2 and builds resp2: {result}")
         # ------------------------------------------------------------
         identity, expected_link, resp2 = server.receiveMsg2(msg2)
-        print(f"Server computed the expected link for '{identity}':")
+        print(f"Server's internal expectedLink for '{identity}' (bare, unaffected by linkPrefix):")
         print(f"    {expected_link}")
         print()
         print_wire("resp2", resp2)
         resp2_plain = decrypt_json(resp2, client.clientPrivateKey)
         print_plain("resp2", resp2_plain)
+        print(f"Note: the \"result\" field above has linkPrefix ({server.linkPrefix!r}) applied - "
+              f"only what the client receives is prefixed.\n")
 
         # ------------------------------------------------------------
         banner("STEP 6 - Client processes resp2 and extracts the secret link")
         # ------------------------------------------------------------
         link = client.process_resp2(resp2)
-        print(f"Link received by client:        {link}")
-        print(f"Link independently expected\n"
-              f"  by the client:                {client.expected_link}")
-        print(f"Link independently expected\n"
-              f"  by the server:                {expected_link}")
+        print(f"Link received by client (with linkPrefix): {link}")
+        print(f"Bare link independently expected\n"
+              f"  by the client:                           {client.expected_link}")
+        print(f"Bare link independently expected\n"
+              f"  by the server (expectedLink):             {expected_link}")
 
-        assert link == expected_link == client.expected_link
+        assert link == f"{server.linkPrefix}{expected_link}"
+        assert expected_link == client.expected_link
 
-        banner("HANDSHAKE COMPLETE - all three link values match")
-        print(f"\nSecret link: http://host:port/get-link/{link}\n")
+        banner("HANDSHAKE COMPLETE - all link values are consistent")
+        print(f"\nSecret link (ready to use): {link}\n")
 
 
 if __name__ == "__main__":

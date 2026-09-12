@@ -46,13 +46,21 @@ Client                                              Server
    by sending it back: `{"nonceServer": <uint64>}`, encrypted with the
    **server's** public key.
 4. **resp2** (server -> client): the server replies with the secret
-   link: `{"link": "<32 hex chars>"}`, encrypted with the **client's**
+   link: `{"result": "<32 hex chars>"}`, encrypted with the **client's**
    public key.
 
 The **link** is `hex(nonceClient) || hex(nonceServer)`, each nonce
 zero-padded to 16 hex characters (64 bits), for 32 hex characters
-total, meant to be understood as a path:
-`http://host:port/get-link/<32HEX>`.
+total.
+
+> **Note:** RMAP itself does not implement, require, or assume any
+> particular HTTP route for retrieving whatever the link unlocks.
+> RMAP only computes the 32-hex-char string (`expectedLink`, see
+> below) and, optionally, lets you prepend your own prefix to what's
+> sent to the client (`linkPrefix`). What endpoint your project
+> exposes, what it's called, and what `expectedLink` even represents in
+> your app (a document ID, a session token, ...) is entirely up to your
+> own Flask implementation.
 
 ### Wire format
 
@@ -70,7 +78,7 @@ stripped away - i.e. just the raw base64 body of the armor block.
 The content that gets encrypted (before armoring) is itself a JSON
 string, e.g. for msg1: `{"identity": "Group_01", "nonceClient": 5465464}`.
 Nonces are transmitted as plain **JSON integers** in msg1/resp1/msg2 -
-they are only ever turned into a hex string for the final `link` field
+they are only ever turned into a hex string for the final `result` field
 in resp2.
 
 ## Installing this library in your project
@@ -113,7 +121,7 @@ Each tagged release publishes `rmap-<version>-py3-none-any.whl` (and an
 sdist) as release assets. You can install the wheel directly by URL:
 
 ```bash
-pip install https://github.com/YOUR-ORG/rmap-library/releases/download/v1.0.0/rmap-1.0.0-py3-none-any.whl
+pip install https://github.com/nharrand/RMAP/releases/download/v1.0.0/rmap-1.0.0-py3-none-any.whl
 ```
 
 or download it first and install locally:
@@ -147,6 +155,13 @@ the file name).
 
 ## Server-side usage (Flask)
 
+> The route names below (`/msg1`, `/msg2`, and especially the final
+> "retrieve the resource" endpoint) are just an example project's
+> choices, **not** something RMAP requires. RMAP only gives you
+> `receiveMsg1`/`receiveMsg2` (the handshake logic) and `expectedLink`
+> (an opaque string key); it has no opinion on your URL scheme,
+> endpoint names, or what `expectedLink` represents in your app.
+
 ```python
 from flask import Flask, request, jsonify
 from rmap import RMAPServer, RMAPError
@@ -157,6 +172,7 @@ server = RMAPServer(
     server_public_key_path="keys/server_pub.asc",
     server_private_key_path="keys/server_priv.asc",
     passphrase=None,          # or a string if the key is protected
+    linkPrefix="http://localhost:5000/get-document/",
     verbose=True,
 )
 server.loadIdentities("keys/clients/")
@@ -175,16 +191,41 @@ def msg1():
 
 @app.post("/msg2")
 def msg2():
-    identity, expected_link, resp2 = server.receiveMsg2(request.get_json())
+    # expectedLink is always the bare 32-hex-char link, even though the
+    # "result" field *inside* resp2 is prefixed with linkPrefix. Use
+    # expectedLink as your internal session/lookup key - here, to
+    # remember which identity completed which handshake.
+    identity, expectedLink, resp2 = server.receiveMsg2(request.get_json())
+    sessions[expectedLink] = identity   # e.g. store however you track sessions
     return jsonify(resp2)
 
 
-@app.get("/get-link/<link>")
-def get_link(link):
-    # look up `link` against the sessions you've completed and serve
-    # whatever the "secret link" is supposed to unlock
+# This route - its name, its URL shape, what "id" means - is entirely
+# up to your project. This example happens to reuse expectedLink as
+# the id, but that's a choice, not a requirement.
+@app.get("/get-document/<id>")
+def get_document(id):
+    identity = sessions.get(id)
+    if identity is None:
+        return jsonify({"error": "unknown or incomplete session"}), 404
     ...
 ```
+
+### `linkPrefix`
+
+`RMAPServer(..., linkPrefix="http://localhost:5000/get-document/")`
+prepends that string to the `"result"` field the client receives inside
+resp2, so the client gets back a ready-to-use, clickable URL instead of
+a bare hex string. It defaults to `""` (no prefix). The prefix itself
+is entirely your choice - RMAP does not require any particular scheme,
+host, or path.
+
+**This only affects what's sent to the client.** The `expectedLink`
+value returned by `receiveMsg2()`, and the value returned by
+`getExpectedLink()`, are always the bare 32-hex-char link, unaffected by
+`linkPrefix` - so you can keep using it directly as an internal
+session/lookup key no matter what prefix you configured, or whether you
+use a prefix at all.
 
 ## Exceptions
 
@@ -207,6 +248,19 @@ good practice to also test your endpoints against unexpected/malformed
 input and make sure your app doesn't leak a raw 500 in cases this
 library doesn't already turn into a clean `RMAPError`.
 
+## Demonstration script
+
+To see a full happy-path handshake end-to-end, with every message
+printed both as it appears on the wire (encrypted) and decrypted, run:
+
+```bash
+python examples/demo_handshake.py
+```
+
+It generates throwaway keypairs, runs `RMAPServer`/`RMAPClient` directly
+(no Flask, no network), and prints msg1, resp1, msg2, and resp2 at each
+step in both forms, ending with the resulting secret link.
+
 ## CLI test client
 
 Once your Flask server is running, you can drive a full handshake
@@ -222,6 +276,15 @@ rmap-client \
     --verbose
 ```
 
+`--fetch-link` is an optional convenience: after the handshake, it
+performs one extra GET to check the resulting link end-to-end. If your
+server used `linkPrefix`, the CLI follows whatever absolute URL you
+configured; otherwise it guesses `<url>/get-link/<link>` by default -
+override that guess with `--get-link-path /get-document` (or whatever
+matches your app), or just skip `--fetch-link` and test your own
+endpoint separately. Either way, this is tooling built on top of RMAP,
+not something RMAP itself requires or assumes.
+
 Run `rmap-client --help` for all options (custom endpoint paths,
 passphrase handling, timeout, etc.).
 
@@ -232,4 +295,19 @@ The library is silent by default. Pass `verbose=True` to `RMAPServer`/
 `logger=your_logger` (e.g. `logger=app.logger` in Flask) to route
 rmap's log messages into your own logging setup.
 
+## Development
 
+Clone the repo and install with the `dev` extra to get `pytest`:
+
+```bash
+git clone https://github.com/nharrand/RMAP.git
+cd RMAP
+pip install -e ".[dev]"
+pytest -v
+```
+
+CI (`.github/workflows/tests.yml`) runs the test suite on every push
+and pull request against Python 3.9-3.12. Tagged pushes (`vX.Y.Z`)
+trigger `.github/workflows/release.yml`, which builds the sdist/wheel,
+runs the tests, and attaches the built artifacts to the corresponding
+GitHub Release.
