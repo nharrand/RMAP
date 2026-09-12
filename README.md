@@ -82,7 +82,7 @@ a released wheel from the repo's GitHub Releases page.
 ### Option A: pip install directly from GitHub (a tagged version)
 
 ```bash
-pip install "rmap @ git+https://github.com/YOUR-ORG/rmap-library.git@v1.0.0"
+pip install "rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.0"
 ```
 
 Or without pinning to a tag (tracks the default branch - not
@@ -90,20 +90,20 @@ recommended once you've started your project, since the library may
 change):
 
 ```bash
-pip install git+https://github.com/YOUR-ORG/rmap-library.git
+pip install git+https://github.com/nharrand/RMAP.git
 ```
 
 In a `requirements.txt`:
 
 ```
-rmap @ git+https://github.com/YOUR-ORG/rmap-library.git@v1.0.0
+rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.0
 ```
 
 In a `pyproject.toml` (PEP 621 `dependencies`):
 
 ```toml
 dependencies = [
-    "rmap @ git+https://github.com/YOUR-ORG/rmap-library.git@v1.0.0",
+    "rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.0",
 ]
 ```
 
@@ -232,19 +232,4 @@ The library is silent by default. Pass `verbose=True` to `RMAPServer`/
 `logger=your_logger` (e.g. `logger=app.logger` in Flask) to route
 rmap's log messages into your own logging setup.
 
-## Development
 
-Clone the repo and install with the `dev` extra to get `pytest`:
-
-```bash
-git clone https://github.com/YOUR-ORG/rmap-library.git
-cd rmap-library
-pip install -e ".[dev]"
-pytest -v
-```
-
-CI (`.github/workflows/tests.yml`) runs the test suite on every push
-and pull request against Python 3.9-3.12. Tagged pushes (`vX.Y.Z`)
-trigger `.github/workflows/release.yml`, which builds the sdist/wheel,
-runs the tests, and attaches the built artifacts to the corresponding
-GitHub Release.
