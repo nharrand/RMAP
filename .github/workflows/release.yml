@@ -1,0 +1,38 @@
+name: release
+
+# Builds the sdist + wheel and attaches them to the GitHub Release
+# whenever a version tag (e.g. v1.0.0) is pushed. Trigger by creating
+# a release/tag in GitHub, or run manually and upload dist/* by hand
+# if you'd rather not use this workflow at all.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tool
+        run: pip install build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Run tests before releasing
+        run: |
+          pip install -e ".[dev]"
+          pytest -v
+
+      - name: Upload dist artifacts to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
