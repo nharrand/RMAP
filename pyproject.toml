@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rmap"
-version = "1.0.0"
+version = "1.0.1"
 description = "Reference implementation of the RMAP authentication protocol, for SOFTSEC coursework. Do not use outside of this course."
 readme = "README.md"
 requires-python = ">=3.9"
