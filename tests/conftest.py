@@ -35,8 +35,8 @@ def keys(tmp_path_factory):
 
     clients_dir = tmp_path / "clients"
     clients_dir.mkdir()
-    (clients_dir / "Group_01").write_text(client_pub.read_text())
-    (clients_dir / "Group_02").write_text(protected_pub.read_text())
+    (clients_dir / "Group_01.asc").write_text(client_pub.read_text())
+    (clients_dir / "Group_02.asc").write_text(protected_pub.read_text())
 
     return {
         "server_priv": server_priv,

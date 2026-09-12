@@ -20,6 +20,23 @@ def test_load_identities_directory(keys):
     assert set(srv.identities.keys()) == {"Group_01", "Group_02"}
 
 
+def test_load_identities_strips_file_extension(tmp_path, keys):
+    """
+    loadIdentities() must register identities by file stem, not full
+    filename - a file named "Group_07.asc" should register the identity
+    "Group_07", not "Group_07.asc".
+    """
+    clients_dir = tmp_path / "clients_with_extensions"
+    clients_dir.mkdir()
+    (clients_dir / "Group_07.asc").write_text(keys["client_pub"].read_text())
+
+    srv = RMAPServer(keys["server_pub"], keys["server_priv"])
+    srv.loadIdentities(clients_dir)
+
+    assert "Group_07" in srv.identities
+    assert "Group_07.asc" not in srv.identities
+
+
 def test_full_handshake_happy_path(server, client):
     msg1 = client.build_msg1()
     identity, resp1 = server.receiveMsg1(msg1)

@@ -60,7 +60,7 @@ def main() -> None:
         clients_dir = tmp / "clients"
         clients_dir.mkdir()
         client_priv_path.write_text(str(client_key))
-        (clients_dir / "Group_01").write_text(str(client_key.pubkey))
+        (clients_dir / "Group_01.asc").write_text(str(client_key.pubkey))
 
         print(f"Generated server keypair:  {server_pub_path.name}, {server_priv_path.name}")
         print(f"Generated client keypair:  {client_priv_path.name} (identity 'Group_01')")

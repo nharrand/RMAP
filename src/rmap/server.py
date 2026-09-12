@@ -139,12 +139,14 @@ class RMAPServer:
     def loadIdentities(self, directory: PathLike) -> None:
         """
         Load every key file in `directory`, registering one identity per
-        file. The identity name is the file name (including extension).
+        file. The identity name is the file's stem (file name without its
+        extension) - e.g. a file named "Group_01.asc" registers the
+        identity "Group_01".
         """
         directory = Path(directory)
         for entry in sorted(directory.iterdir()):
             if entry.is_file():
-                self.loadIdentity(entry.name, entry)
+                self.loadIdentity(entry.stem, entry)
 
     # ------------------------------------------------------------------
     # Protocol messages

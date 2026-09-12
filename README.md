@@ -6,7 +6,7 @@ for a Software Security course. It provides a Flask-friendly
 `RMAPServer` class your project can use to authenticate clients from a
 list of known public keys and hand back a secret link.
 
-> This is **v1.0.0**. It is a reference implementation for coursework
+> This is **v1.0.2**. It is a reference implementation for coursework
 > and, like any piece of software, is not guaranteed to be bug-free -
 > testing your integration against it is part of the exercise. A v2
 > release will follow later in the course.
@@ -90,7 +90,7 @@ a released wheel from the repo's GitHub Releases page.
 ### Option A: pip install directly from GitHub (a tagged version)
 
 ```bash
-pip install "rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.0"
+pip install "rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.2"
 ```
 
 Or without pinning to a tag (tracks the default branch - not
@@ -104,14 +104,14 @@ pip install git+https://github.com/nharrand/RMAP.git
 In a `requirements.txt`:
 
 ```
-rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.0
+rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.2
 ```
 
 In a `pyproject.toml` (PEP 621 `dependencies`):
 
 ```toml
 dependencies = [
-    "rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.0",
+    "rmap @ git+https://github.com/nharrand/RMAP.git@v1.0.2",
 ]
 ```
 
@@ -121,13 +121,13 @@ Each tagged release publishes `rmap-<version>-py3-none-any.whl` (and an
 sdist) as release assets. You can install the wheel directly by URL:
 
 ```bash
-pip install https://github.com/nharrand/RMAP/releases/download/v1.0.0/rmap-1.0.0-py3-none-any.whl
+pip install https://github.com/nharrand/RMAP/releases/download/v1.0.2/rmap-1.0.2-py3-none-any.whl
 ```
 
 or download it first and install locally:
 
 ```bash
-pip install ./rmap-1.0.0-py3-none-any.whl
+pip install ./rmap-1.0.2-py3-none-any.whl
 ```
 
 Either way, once installed you `import rmap` like any other package.
@@ -149,9 +149,17 @@ rmap-keygen --name "Group_01" --email group01@example.com \
 ```
 
 Client public keys that the server should accept go in a directory,
-one file per identity, **named after the identity** (e.g. a file named
-`Group_01` registers the identity `Group_01` - the identity is exactly
-the file name).
+one file per identity, **named after the identity**. The identity is
+the file's **stem** (file name without its extension) - e.g. a file
+named `Group_01.asc` registers the identity `Group_01`. Any extension
+works the same way (or none at all); only the final extension is
+stripped, so avoid dots elsewhere in an identity name if you want the
+full name preserved.
+
+```bash
+mkdir -p keys/clients
+cp keys/group01_pub.asc keys/clients/Group_01.asc
+```
 
 ## Server-side usage (Flask)
 

@@ -1,7 +1,7 @@
 name: release
 
 # Builds the sdist + wheel and attaches them to the GitHub Release
-# whenever a version tag (e.g. v1.0.0) is pushed. Trigger by creating
+# whenever a version tag (e.g. v1.0.2) is pushed. Trigger by creating
 # a release/tag in GitHub, or run manually and upload dist/* by hand
 # if you'd rather not use this workflow at all.
 
